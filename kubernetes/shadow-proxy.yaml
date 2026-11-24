@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shadow-proxy-config
+data:
+  nginx.conf: |
+    events {}
+    http {
+      server {
+        listen 80;
+
+        location / {
+          mirror /_shadow;
+          mirror_request_body on;
+          proxy_pass http://aceest-fitness-service:5000;
+        }
+
+        location = /_shadow {
+          internal;
+          proxy_pass http://aceest-fitness-shadow-service:5000$request_uri;
+          proxy_set_header Host $host;
+          proxy_set_header X-Original-URI $request_uri;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-fitness-shadow-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aceest-fitness-shadow-proxy
+  template:
+    metadata:
+      labels:
+        app: aceest-fitness-shadow-proxy
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: shadow-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aceest-fitness-shadow-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app: aceest-fitness-shadow-proxy
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
