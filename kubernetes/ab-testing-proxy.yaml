@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ab-testing-proxy-config
+data:
+  nginx.conf: |
+    events {}
+    http {
+      upstream version_a {
+        server aceest-fitness-service:5000;
+      }
+
+      upstream version_b {
+        server aceest-fitness-version-b:5000;
+      }
+
+      map $http_x_experiment $backend {
+        default version_a;
+        A version_a;
+        B version_b;
+      }
+
+      server {
+        listen 80;
+
+        location / {
+          proxy_pass http://$backend;
+          proxy_set_header Host $host;
+          proxy_set_header X-Experiment $http_x_experiment;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aceest-fitness-ab-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aceest-fitness-ab-proxy
+  template:
+    metadata:
+      labels:
+        app: aceest-fitness-ab-proxy
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: ab-testing-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aceest-fitness-ab-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app: aceest-fitness-ab-proxy
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
