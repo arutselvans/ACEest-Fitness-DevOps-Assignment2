@@ -2,6 +2,10 @@
 pipeline {
     agent any
 
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -9,31 +13,23 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Run Unit Tests in Docker') {
             steps {
                 sh '''
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                    pip install pytest-cov
-                '''
-            }
-        }
-
-        stage('Run Unit Tests and Coverage') {
-            steps {
-                sh '''
-                    . venv/bin/activate
-                    python -m pytest -v \
-                        --junitxml=test-results.xml \
-                        --cov=app \
-                        --cov-report=xml
+                    docker run --rm \
+                        --user "$(id -u):$(id -g)" \
+                        -e HOME=/tmp \
+                        -e PYTHONUSERBASE=/tmp/python-user \
+                        -v "$WORKSPACE:/app" \
+                        -w /app \
+                        python:3.9-slim \
+                        sh -c 'python -m pip install --user --no-cache-dir -r requirements.txt pytest-cov && python -m pytest -v --junitxml=test-results.xml --cov=app --cov-report=xml'
                 '''
             }
             post {
                 always {
                     junit 'test-results.xml'
+                    archiveArtifacts artifacts: 'coverage.xml', allowEmptyArchive: true
                 }
             }
         }
