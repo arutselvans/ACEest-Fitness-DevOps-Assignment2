@@ -1,7 +1,21 @@
 
+import os
+import secrets
+
 from flask import Flask, request, jsonify
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 app = Flask(__name__)
+
+# Configure a secret key for secure sessions.
+# Set SECRET_KEY as an environment variable in production.
+app.config["SECRET_KEY"] = (
+    os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+)
+
+# Enable CSRF protection globally.
+csrf = CSRFProtect()
+csrf.init_app(app)
 
 members = []
 
@@ -12,6 +26,13 @@ def home():
         "application": "ACEest Fitness & Gym",
         "version": "1.0",
         "status": "Running"
+    })
+
+
+@app.route("/csrf-token")
+def get_csrf_token():
+    return jsonify({
+        "csrf_token": generate_csrf()
     })
 
 
@@ -60,21 +81,29 @@ def calculate_bmi():
         weight = float(data.get("weight", 0))
         height = float(data.get("height", 0))
     except (ValueError, TypeError):
-        return jsonify({"error": "Weight and height must be numbers"}), 400
+        return jsonify({
+            "error": "Weight and height must be numbers"
+        }), 400
 
     if weight <= 0 or height <= 0:
-        return jsonify({"error": "Weight and height must be positive"}), 400
+        return jsonify({
+            "error": "Weight and height must be positive"
+        }), 400
 
     bmi = round(weight / (height ** 2), 2)
 
+    if bmi < 18.5:
+        category = "Underweight"
+    elif bmi < 25:
+        category = "Normal"
+    elif bmi < 30:
+        category = "Overweight"
+    else:
+        category = "Obese"
+
     return jsonify({
         "bmi": bmi,
-        "category": (
-            "Underweight" if bmi < 18.5 else
-            "Normal" if bmi < 25 else
-            "Overweight" if bmi < 30 else
-            "Obese"
-        )
+        "category": category
     })
 
 
