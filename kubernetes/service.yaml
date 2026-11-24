@@ -6,6 +6,7 @@ spec:
   type: ClusterIP
   selector:
     app: aceest-fitness
+    version: blue
   ports:
     - port: 5000
       targetPort: 5000
